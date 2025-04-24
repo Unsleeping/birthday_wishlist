@@ -14,10 +14,15 @@ RUN pnpm install
 # Copy the rest of the source code
 COPY . .
 
-# Build the app
-RUN pnpm run lint
-# This builds the client-side application
-RUN pnpm run dev:frontend -- --build
+# Set environment for non-interactive Convex
+ENV CONVEX_DEPLOY_KEY=dummy_key_for_build
+ENV CI=true
+
+# Run type checking and linting without Convex setup
+RUN pnpm run lint:ci
+
+# Build the application
+RUN pnpm run build
 
 # Production stage
 FROM node:20-slim as production
@@ -43,10 +48,12 @@ RUN npm install -g serve
 # Set environment variables
 ENV PORT=3000
 ENV NODE_ENV=production
-ENV CONVEX_DEPLOYMENT=prod
+
+# Note: CONVEX_DEPLOYMENT and CONVEX_DEPLOY_KEY should be set in Railway environment variables
+# not hardcoded in the Dockerfile
 
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["sh", "-c", "npx convex deploy --cmd 'serve -s dist -l $PORT'"]
+# Start the application (without convex deploy in the command)
+CMD ["serve", "-s", "dist", "-l", "3000"]
