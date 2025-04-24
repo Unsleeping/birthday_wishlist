@@ -17,11 +17,32 @@ This document provides instructions for deploying your VITE React + Convex appli
 3. In the Railway project settings, add the following environment variables:
 
    - `CONVEX_DEPLOY_KEY`: Your Convex deploy key (found in your Convex dashboard)
-   - `VITE_CONVEX_URL`: Your Convex deployment URL (e.g., `https://bold-panda-123.convex.cloud`)
+   - `VITE_CONVEX_URL`: Your Convex deployment URL (e.g., `https://kindhearted-bloodhound-963.convex.cloud`)
 
-   **Note**: If you're using a custom domain with Convex (Pro plan required), you would set this to your custom domain URL instead.
+   **Important**: The Convex URL should be the complete URL including the `https://` prefix.
 
 4. Railway will automatically deploy your application using the Dockerfile in your repository
+
+## How It Works
+
+The Dockerfile in this project:
+
+1. Sets up a build environment for your application
+2. Performs the build at container startup time with the correct Convex URL
+3. Deploys the Convex functions (if a deploy key is provided)
+4. Serves the built application
+
+This approach ensures that the correct Convex URL is embedded in your JavaScript bundles at build time, avoiding the "No address provided to ConvexReactClient" error.
+
+## Verifying Convex Client Initialization
+
+Your application is properly configured to use the Convex URL from the environment variable in `src/main.tsx`:
+
+```typescript
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+```
+
+This code initializes the Convex client with the URL from the `VITE_CONVEX_URL` environment variable. Make sure this environment variable is set correctly in Railway.
 
 ## Convex Custom Domain Setup (Optional)
 
@@ -47,7 +68,9 @@ Uncaught Error: No address provided to ConvexReactClient.
 Make sure:
 
 1. The `VITE_CONVEX_URL` is properly set in Railway
-2. Your application is using the correct environment variable to initialize the Convex client
+2. Check the Railway logs to ensure the build process sees the correct URL:
+   - Look for "Building with Convex URL: [your URL]" in the logs
+3. Verify your application correctly uses the environment variable to initialize the Convex client
 
 ### Convex Deployment Issues
 

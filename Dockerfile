@@ -16,15 +16,8 @@ COPY . .
 
 # Set environment for non-interactive Convex
 ENV CI=true
-# These environment variables will be overridden by actual values at build time
-# but are needed for the build process to complete
-ENV VITE_CONVEX_URL=placeholder_will_be_set_at_runtime
 
-# Run type checking and linting without Convex setup
-RUN pnpm run lint:ci
-
-# Build the application
-RUN pnpm run build
+# We'll skip the build here as we'll do it at runtime with the correct URL
 
 # Production stage
 FROM node:20-slim as production
@@ -34,24 +27,42 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Only copy what's needed for production
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/convex ./convex
+# Copy everything needed for the build
 COPY --from=build /app/package.json ./
 COPY --from=build /app/pnpm-lock.yaml ./
+COPY --from=build /app/tsconfig.json ./
+COPY --from=build /app/tsconfig.app.json ./
+COPY --from=build /app/tsconfig.node.json ./
+COPY --from=build /app/vite.config.ts ./
 COPY --from=build /app/index.html ./
+COPY --from=build /app/tailwind.config.js ./
+COPY --from=build /app/postcss.config.cjs ./
+COPY --from=build /app/components.json ./
+COPY --from=build /app/convex ./convex/
+COPY --from=build /app/src ./src/
 
-# Install production dependencies only
-RUN pnpm install --prod
+# Create public directory and copy content conditionally  
+RUN mkdir -p ./public
+# Use a script to conditionally copy public files if they exist
+RUN echo '#!/bin/sh\n\
+if [ -d "/app/public" ] && [ -n "$(ls -A /app/public 2>/dev/null)" ]; then\n\
+  cp -r /app/public/* ./public/\n\
+fi\n\
+' > /tmp/copy_public.sh && chmod +x /tmp/copy_public.sh
+COPY --from=build /app/public /app/public/
+RUN /tmp/copy_public.sh || true
 
-# Install serve to serve the static files
+# Install dependencies
+RUN pnpm install
+
+# Install tools
 RUN npm install -g serve convex
 
 # Set environment variables
 ENV PORT=3000
 ENV NODE_ENV=production
 
-# Create a startup script that injects the Convex URL at runtime
+# Create a startup script to build with the correct Convex URL and then serve
 RUN echo '#!/bin/sh\n\
 if [ -z "$CONVEX_URL" ] && [ -z "$VITE_CONVEX_URL" ]; then\n\
   echo "Error: Neither CONVEX_URL nor VITE_CONVEX_URL environment variable is set"\n\
@@ -59,16 +70,18 @@ if [ -z "$CONVEX_URL" ] && [ -z "$VITE_CONVEX_URL" ]; then\n\
   exit 1\n\
 fi\n\
 \n\
+# Set the Convex URL for the build\n\
+export VITE_CONVEX_URL=${VITE_CONVEX_URL:-$CONVEX_URL}\n\
+\n\
+echo "Building with Convex URL: $VITE_CONVEX_URL"\n\
+\n\
+# Build the application with the correct URL\n\
+pnpm run build\n\
+\n\
 # Deploy Convex functions if we have a deploy key\n\
 if [ -n "$CONVEX_DEPLOY_KEY" ]; then\n\
   echo "Deploying Convex functions..."\n\
-  convex deploy\n\
-fi\n\
-\n\
-# Replace placeholder URL in index.html\n\
-CONVEX_URL_TO_USE=${CONVEX_URL:-$VITE_CONVEX_URL}\n\
-if [ -f "./dist/index.html" ]; then\n\
-  sed -i "s|placeholder_will_be_set_at_runtime|$CONVEX_URL_TO_USE|g" ./dist/index.html\n\
+  npx convex deploy\n\
 fi\n\
 \n\
 # Start server\n\
