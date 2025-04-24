@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SentInvitationsSkeleton } from "./sent-invitations-skeleton";
+import { RemoveFriendAlert } from "./remove-friend-alert";
 
 const inviteFormSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -43,6 +44,10 @@ const getStatusBadge = (status: string) => {
           Accepted
         </Badge>
       );
+    case "removed":
+      return (
+        <Badge className="bg-red-50 text-red-700 border-red-200">Removed</Badge>
+      );
     default:
       return <Badge>{status}</Badge>;
   }
@@ -53,7 +58,17 @@ export function InvitationManager() {
   const incomingInvitations = useQuery(api.invitations.listIncoming) ?? [];
   const createInvitation = useMutation(api.invitations.create);
   const acceptInvitation = useMutation(api.invitations.accept);
+  const removeFriend = useMutation(api.invitations.remove);
+  const removeSentInvitation = useMutation(api.invitations.removeSent);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // For remove friend confirmation dialog
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [friendToRemove, setFriendToRemove] = useState<{
+    id: Id<"users"> | null;
+    name: string;
+    isSent: boolean;
+  } | null>(null);
 
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteFormSchema),
@@ -89,6 +104,37 @@ export function InvitationManager() {
           error instanceof Error ? error.message : "Unknown error"
         }`,
       });
+    }
+  };
+
+  const openRemoveDialog = (
+    friendId: Id<"users"> | null,
+    friendName: string,
+    isSent = false
+  ) => {
+    setFriendToRemove({ id: friendId, name: friendName, isSent });
+    setShowRemoveDialog(true);
+  };
+
+  const confirmRemoveFriend = async () => {
+    if (!friendToRemove) return;
+
+    try {
+      if (friendToRemove.isSent) {
+        // This is a sent invitation
+        await removeSentInvitation({ email: friendToRemove.name });
+      } else if (friendToRemove.id) {
+        // This is a received invitation
+        await removeFriend({ friendUserId: friendToRemove.id });
+      }
+      toast.success("Friend removed successfully");
+    } catch (error) {
+      toast.error("Failed to remove friend", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setShowRemoveDialog(false);
+      setFriendToRemove(null);
     }
   };
 
@@ -138,7 +184,19 @@ export function InvitationManager() {
         <Tabs defaultValue="sent">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="sent">Sent</TabsTrigger>
-            <TabsTrigger value="received">Received</TabsTrigger>
+            <TabsTrigger value="received" className="relative">
+              Received
+              {incomingInvitations.filter((inv) => inv.status === "pending")
+                .length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                  {
+                    incomingInvitations.filter(
+                      (inv) => inv.status === "pending"
+                    ).length
+                  }
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="sent" className="mt-4">
@@ -162,6 +220,22 @@ export function InvitationManager() {
                           {getStatusBadge(invitation.status)}
                         </div>
                       </div>
+                      {invitation.status === "accepted" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() =>
+                            openRemoveDialog(
+                              null,
+                              invitation.email,
+                              true // Mark as sent invitation
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -172,43 +246,111 @@ export function InvitationManager() {
           <TabsContent value="received" className="mt-4">
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Received Invitations</h3>
+
+              {incomingInvitations.filter((inv) => inv.status === "pending")
+                .length > 0 && (
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-md text-blue-700 mb-4">
+                  <p className="font-medium">
+                    You have{" "}
+                    {
+                      incomingInvitations.filter(
+                        (inv) => inv.status === "pending"
+                      ).length
+                    }{" "}
+                    pending invitation
+                    {incomingInvitations.filter(
+                      (inv) => inv.status === "pending"
+                    ).length > 1
+                      ? "s"
+                      : ""}
+                    !
+                  </p>
+                  <p className="text-sm">
+                    Accept invitations to view and share wishlists with friends.
+                  </p>
+                </div>
+              )}
+
               {incomingInvitations.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">
                   No invitations received
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {incomingInvitations.map((invitation) => (
-                    <div
-                      key={invitation._id}
-                      className="flex justify-between items-center p-3 bg-muted rounded-md"
-                    >
-                      <div>
-                        <p className="font-medium">
-                          From: {invitation.fromUserEmail}
-                        </p>
-                        <div className="mt-1">
-                          {getStatusBadge(invitation.status)}
+                  {incomingInvitations
+                    .sort((a, b) => {
+                      // Custom sort: pending first, then accepted, then removed
+                      const statusOrder = {
+                        pending: 0,
+                        accepted: 1,
+                        removed: 2,
+                      };
+                      const statusA =
+                        statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+                      const statusB =
+                        statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+                      return statusA - statusB;
+                    })
+                    .map((invitation) => (
+                      <div
+                        key={invitation._id}
+                        className="flex justify-between items-center p-3 bg-muted rounded-md"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            From: {invitation.fromUserEmail}
+                          </p>
+                          <div className="mt-1">
+                            {getStatusBadge(invitation.status)}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {invitation.status === "pending" ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() =>
+                                void handleAcceptInvitation(
+                                  invitation.fromUserId
+                                )
+                              }
+                            >
+                              Accept
+                            </Button>
+                          ) : (
+                            invitation.status === "accepted" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() =>
+                                  openRemoveDialog(
+                                    invitation.fromUserId,
+                                    invitation.fromUserEmail,
+                                    false // Mark as received invitation
+                                  )
+                                }
+                              >
+                                Remove
+                              </Button>
+                            )
+                          )}
                         </div>
                       </div>
-                      {invitation.status === "pending" && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() =>
-                            void handleAcceptInvitation(invitation.fromUserId)
-                          }
-                        >
-                          Accept
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </div>
           </TabsContent>
         </Tabs>
+
+        <RemoveFriendAlert
+          open={showRemoveDialog}
+          onOpenChange={setShowRemoveDialog}
+          friendToRemove={friendToRemove}
+          onCancel={() => setFriendToRemove(null)}
+          onConfirm={confirmRemoveFriend}
+        />
       </CardContent>
     </Card>
   );

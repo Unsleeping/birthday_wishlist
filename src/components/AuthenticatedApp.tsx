@@ -95,7 +95,12 @@ export function AuthenticatedApp() {
                               Click to view wishlist
                             </p>
                           </div>
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="pointer-events-none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             View
                           </Button>
                         </div>
