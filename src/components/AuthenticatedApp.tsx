@@ -1,6 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { SignOutButton } from "./shared/SignOutButton";
+import { UserBadge } from "./shared/UserBadge";
 import { InvitationManager } from "./InvitationManager";
 import { WishList } from "./WishList";
 import { Toaster } from "./ui/toaster";
@@ -44,7 +44,9 @@ export function AuthenticatedApp() {
       <div className="container mx-auto px-4 space-y-8">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Birthday Wishlist App</h1>
-          <SignOutButton />
+          <div className="flex items-center gap-4">
+            <UserBadge />
+          </div>
         </div>
 
         {selectedFriendId ? (
