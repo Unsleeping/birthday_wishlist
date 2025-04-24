@@ -1,32 +1,31 @@
 import { useConvexAuth } from "convex/react";
-import { SignInForm } from "./SignInForm";
-import { SignOutButton } from "./SignOutButton";
-import { InvitationManager } from "./InvitationManager";
-import { WishList } from "./WishList";
+import { AuthForm } from "./components/forms/AuthForm";
+import { Toaster } from "./components/ui/toaster";
+
+import { AuthenticatedApp } from "./components/AuthenticatedApp";
 
 export default function App() {
   const { isAuthenticated, isLoading } = useConvexAuth();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-t-primary rounded-full animate-spin mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
-    return <SignInForm />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <AuthForm />
+        <Toaster />
+      </div>
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4 space-y-8">
-        <div className="flex justify-end">
-          <SignOutButton />
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <WishList />
-          <InvitationManager />
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthenticatedApp />;
 }
