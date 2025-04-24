@@ -1,10 +1,9 @@
-# Build stage
-FROM node:20-slim as builder
+FROM node:20-slim
 
 WORKDIR /app
 
 # Install pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm serve
 
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
@@ -18,17 +17,8 @@ COPY . .
 # Build the application
 RUN pnpm run build
 
-# Production stage
-FROM nginx:alpine
+# Expose port (Railway will override this)
+EXPOSE 3000
 
-# Copy the built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+# Start the application
+CMD ["serve", "-s", "dist", "-l", "3000"] 
