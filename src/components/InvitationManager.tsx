@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SentInvitationsSkeleton } from "./sent-invitations-skeleton";
 
 const inviteFormSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -28,8 +29,27 @@ const inviteFormSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteFormSchema>;
 
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case "pending":
+      return (
+        <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">
+          Pending
+        </Badge>
+      );
+    case "accepted":
+      return (
+        <Badge className="bg-green-50 text-green-700 border-green-200">
+          Accepted
+        </Badge>
+      );
+    default:
+      return <Badge>{status}</Badge>;
+  }
+};
+
 export function InvitationManager() {
-  const sentInvitations = useQuery(api.invitations.list) ?? [];
+  const sentInvitations = useQuery(api.invitations.list);
   const incomingInvitations = useQuery(api.invitations.listIncoming) ?? [];
   const createInvitation = useMutation(api.invitations.create);
   const acceptInvitation = useMutation(api.invitations.accept);
@@ -69,25 +89,6 @@ export function InvitationManager() {
           error instanceof Error ? error.message : "Unknown error"
         }`,
       });
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return (
-          <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200">
-            Pending
-          </Badge>
-        );
-      case "accepted":
-        return (
-          <Badge className="bg-green-50 text-green-700 border-green-200">
-            Accepted
-          </Badge>
-        );
-      default:
-        return <Badge>{status}</Badge>;
     }
   };
 
@@ -143,13 +144,14 @@ export function InvitationManager() {
           <TabsContent value="sent" className="mt-4">
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Sent Invitations</h3>
-              {sentInvitations.length === 0 ? (
+              {!sentInvitations && <SentInvitationsSkeleton />}
+              {sentInvitations?.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">
                   No invitations sent
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {sentInvitations.map((invitation) => (
+                  {sentInvitations?.map((invitation) => (
                     <div
                       key={invitation._id}
                       className="flex justify-between items-center p-3 bg-muted rounded-md"

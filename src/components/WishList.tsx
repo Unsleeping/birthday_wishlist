@@ -6,6 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button-simple";
 import { WishForm } from "@/components/forms/WishForm";
+import { WishListSkeleton } from "@/components/wish-list-skeleton";
 
 interface WishListProps {
   userId?: Id<"users">;
@@ -21,7 +22,7 @@ export function WishList({
   // If it's our own list, don't pass userId (which will make it use the current user's ID)
   // If it's someone else's list, pass the userId prop
   const wishlistParams = isOwnList ? {} : { userId };
-  const wishes = useQuery(api.wishes.list, wishlistParams) ?? [];
+  const wishes = useQuery(api.wishes.list, wishlistParams);
 
   const archiveWish = useMutation(api.wishes.archive);
 
@@ -45,16 +46,17 @@ export function WishList({
           {!isOwnList && ownerName ? `${ownerName}'s Wishlist` : "My Wishlist"}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 ">
         {isOwnList && <WishForm />}
 
-        <div className="space-y-4">
-          {wishes.length === 0 ? (
+        <div className="space-y-4 overflow-y-auto max-h-[500px] border rounded-lg p-4">
+          {!wishes && <WishListSkeleton isOwnList={isOwnList} />}
+          {wishes?.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
               No wishes yet
             </p>
           ) : (
-            wishes.map((wish) => (
+            wishes?.map((wish) => (
               <div
                 key={wish._id}
                 className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg"
